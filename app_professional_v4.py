@@ -498,90 +498,87 @@ def render_keyword_analysis(stress_keywords, positive_keywords):
 
 
 def render_feedback_section(db, cloud_mgr, record_id):
-    """Render feedback buttons - Simple and Direct."""
+    """Render feedback buttons - Database is source of truth."""
     st.markdown("---")
     st.markdown("### 👍 Was this prediction helpful?")
     
-    # Check if feedback already submitted (use session state)
+    # Initialize session state key
     feedback_key = f"feedback_given_{record_id}"
     if feedback_key not in st.session_state:
         st.session_state[feedback_key] = False
     
-    # If already submitted, show thank you message
-    if st.session_state[feedback_key]:
-        st.success("🙏 **Thank you for your feedback! We will use it to improve our app.**")
-        return
-    
-    # Simple direct approach - check database first
+    # ALWAYS check database first (source of truth)
+    feedback_in_db = None
     try:
         conn = db._get_connection()
         cursor = conn.cursor()
-        
-        # Check current feedback
         cursor.execute("SELECT user_feedback FROM user_predictions WHERE id = ?", (record_id,))
         result = cursor.fetchone()
-        
-        # If feedback exists in DB, show it
-        if result and result[0] and str(result[0]).strip() not in ['', 'None', 'nan']:
-            st.success("🙏 **Thank you for your feedback! We will use it to improve our app.**")
-            st.session_state[feedback_key] = True
-            conn.close()
-            return
-        
+        if result and result[0] and str(result[0]).strip() not in ['', 'None', 'nan', 'NULL']:
+            feedback_in_db = str(result[0]).strip()
         conn.close()
     except Exception as e:
-        st.error(f"Error checking feedback: {e}")
+        st.error(f"Database error: {e}")
     
-    # Feedback buttons - Direct click handler
+    # If feedback exists in database, show thank you and update session state
+    if feedback_in_db:
+        st.session_state[feedback_key] = True
+        st.success(f"🙏 **Thank you for your feedback! We will use it to improve our app.** (Feedback: {feedback_in_db})")
+        return
+    
+    # If session state says feedback given but DB doesn't have it (shouldn't happen, but handle it)
+    if st.session_state[feedback_key]:
+        st.warning("Feedback may not have been saved properly. Please try again.")
+        st.session_state[feedback_key] = False
+    
+    # Show feedback buttons
     st.markdown("**Tap to give feedback:**")
     
     col1, col2, col3 = st.columns(3)
     
+    feedback_submitted = False
+    feedback_value = None
+    
     with col1:
         if st.button("✅ Yes", key=f"fb_yes_{record_id}", use_container_width=True):
-            # Direct save
-            try:
-                conn = db._get_connection()
-                cursor = conn.cursor()
-                cursor.execute("UPDATE user_predictions SET user_feedback = ? WHERE id = ?", ("Yes", record_id))
-                conn.commit()
-                conn.close()
-                st.session_state[feedback_key] = True
-                st.success("🙏 **Thank you for your feedback! We will use it to improve our app.**")
-                st.balloons()
-            except Exception as e:
-                st.error(f"❌ Error: {e}")
-            st.rerun()
+            feedback_value = "Yes"
+            feedback_submitted = True
     
     with col2:
         if st.button("❌ No", key=f"fb_no_{record_id}", use_container_width=True):
-            # Direct save
-            try:
-                conn = db._get_connection()
-                cursor = conn.cursor()
-                cursor.execute("UPDATE user_predictions SET user_feedback = ? WHERE id = ?", ("No", record_id))
-                conn.commit()
-                conn.close()
-                st.session_state[feedback_key] = True
-                st.success("🙏 **Thank you for your feedback! We will use it to improve our app.**")
-            except Exception as e:
-                st.error(f"❌ Error: {e}")
-            st.rerun()
+            feedback_value = "No"
+            feedback_submitted = True
     
     with col3:
         if st.button("🤔 Not Sure", key=f"fb_unsure_{record_id}", use_container_width=True):
-            # Direct save
-            try:
-                conn = db._get_connection()
-                cursor = conn.cursor()
-                cursor.execute("UPDATE user_predictions SET user_feedback = ? WHERE id = ?", ("Unsure", record_id))
-                conn.commit()
-                conn.close()
+            feedback_value = "Unsure"
+            feedback_submitted = True
+    
+    # Handle feedback submission
+    if feedback_submitted and feedback_value:
+        try:
+            # Save to local SQLite
+            conn = db._get_connection()
+            cursor = conn.cursor()
+            cursor.execute("UPDATE user_predictions SET user_feedback = ? WHERE id = ?", (feedback_value, record_id))
+            conn.commit()
+            
+            # Verify the update
+            cursor.execute("SELECT user_feedback FROM user_predictions WHERE id = ?", (record_id,))
+            verify = cursor.fetchone()
+            conn.close()
+            
+            if verify and verify[0] == feedback_value:
                 st.session_state[feedback_key] = True
-                st.success("🙏 **Thank you for your feedback! We will use it to improve our app.**")
-            except Exception as e:
-                st.error(f"❌ Error: {e}")
-            st.rerun()
+                st.success(f"🙏 **Thank you for your feedback! We will use it to improve our app.** (Saved: {feedback_value})")
+                if feedback_value == "Yes":
+                    st.balloons()
+                st.rerun()
+            else:
+                st.error("❌ Feedback was not saved properly. Please try again.")
+        except Exception as e:
+            st.error(f"❌ Error saving feedback: {e}")
+
 
 
 
