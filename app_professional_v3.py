@@ -688,21 +688,14 @@ def main():
         
         st.markdown("---")
         
-        # User info
-        st.markdown("### 👤 Your Info (Optional)")
-        with st.expander("Add Details", expanded=False):
-            name = st.text_input("Name", value=st.session_state.user_name)
-            age = st.number_input("Age", min_value=0, max_value=120, value=0, step=1)
-            gender = st.selectbox("Gender", ["Prefer not to say", "Male", "Female", "Other"])
-            
-            st.session_state.user_name = name if name else None
-            st.session_state.user_age = age if age > 0 else None
-            st.session_state.user_gender = gender if gender != "Prefer not to say" else None
+        # Navigation
+        page = st.radio("Navigate", ["🧠 Analyze", "📊 Dashboard", "ℹ️ About"])
         
         st.markdown("---")
         
-        # Navigation
-        page = st.radio("Navigate", ["🧠 Analyze", "📊 Dashboard", "ℹ️ About"])
+        st.markdown("### 🔒 Privacy")
+        st.caption("Your data is stored locally and in Supabase cloud.")
+
         
         st.markdown("---")
         
@@ -744,8 +737,25 @@ def main():
                 if ml_model_data is None:
                     st.warning("ML model not found. Using Demo mode.")
                     actual_model = "Demo Mode"
-                else:
-                    st.success("✅ AI Model Loaded!")
+        
+        # User Info Section
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+        st.markdown("### 👤 Your Information (Optional)")
+        
+        col_u1, col_u2, col_u3 = st.columns(3)
+        with col_u1:
+            name = st.text_input("Name", value=st.session_state.user_name, placeholder="Your name")
+        with col_u2:
+            age = st.number_input("Age", min_value=0, max_value=120, value=st.session_state.user_age or 0, step=1)
+        with col_u3:
+            gender = st.selectbox("Gender", ["Prefer not to say", "Male", "Female", "Other"], 
+                                index=["Prefer not to say", "Male", "Female", "Other"].index(st.session_state.user_gender) if st.session_state.user_gender in ["Male", "Female", "Other"] else 0)
+        
+        st.session_state.user_name = name if name else None
+        st.session_state.user_age = age if age > 0 else None
+        st.session_state.user_gender = gender if gender != "Prefer not to say" else None
+        
+        st.markdown('</div>', unsafe_allow_html=True)
         
         # Main analysis section
         st.markdown('<div class="glass-card">', unsafe_allow_html=True)
@@ -779,6 +789,7 @@ def main():
         analyze_clicked = st.button("🔍 Analyze Stress Level", type="primary", use_container_width=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
+
         
         # Analysis results
         if analyze_clicked and text_input.strip():
@@ -789,8 +800,12 @@ def main():
                     model_type=actual_model
                 )
                 
-                # Save to database
+                # Save to database (local + cloud)
                 try:
+                    # Get cloud manager for Supabase
+                    cloud_mgr = get_cloud_manager()
+                    
+                    # Save to local database
                     record_id = db.insert_prediction(
                         name=st.session_state.user_name,
                         age=st.session_state.user_age,
@@ -803,8 +818,23 @@ def main():
                         session_id=st.session_state.session_id
                     )
                     st.session_state.last_prediction_id = record_id
+                    
+                    # Also save to Supabase cloud
+                    cloud_mgr.insert_prediction(
+                        name=st.session_state.user_name,
+                        age=st.session_state.user_age,
+                        gender=st.session_state.user_gender,
+                        user_input_text=text_input,
+                        predicted_class=result['predicted_class'],
+                        confidence_score=result['confidence'],
+                        all_class_probabilities=result['probabilities'],
+                        model_type=result['model_type'],
+                        session_id=st.session_state.session_id
+                    )
+                    
                 except Exception as e:
                     print(f"Database save error: {e}")
+
                 
                 # Display results
                 st.markdown("## 📊 Analysis Results")

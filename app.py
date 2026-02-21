@@ -105,6 +105,26 @@ def load_bert_model(model_path: str = './models/bert_model'):
     return None
 
 
+def save_user_data(text: str, prediction: int, model_type: str):
+    """
+    Save user input data for training purposes.
+    """
+    import csv
+    from datetime import datetime
+    
+    data_file = './data/user_stress_data.csv'
+    file_exists = os.path.exists(data_file)
+    
+    try:
+        with open(data_file, 'a', newline='', encoding='utf-8') as f:
+            writer = csv.writer(f)
+            if not file_exists:
+                writer.writerow(['text', 'label', 'model_type', 'timestamp'])
+            writer.writerow([text, prediction, model_type, datetime.now().isoformat()])
+    except Exception as e:
+        print(f"Error saving user data: {e}")
+
+
 def predict_stress(
     text: str,
     model_data: dict,
@@ -149,6 +169,8 @@ def predict_stress(
                 confidence = None
                 probabilities = None
             
+            save_user_data(text, int(prediction), model_type)
+            
             return {
                 'prediction': int(prediction),
                 'confidence': confidence,
@@ -165,6 +187,8 @@ def predict_stress(
     
     prediction = 1 if stress_score > 1 else 0
     confidence = min(0.5 + stress_score * 0.1, 0.99)
+    
+    save_user_data(text, prediction, model_type)
     
     return {
         'prediction': prediction,
