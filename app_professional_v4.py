@@ -502,6 +502,16 @@ def render_feedback_section(db, cloud_mgr, record_id):
     st.markdown("---")
     st.markdown("### 👍 Was this prediction helpful?")
     
+    # Check if feedback already submitted (use session state)
+    feedback_key = f"feedback_given_{record_id}"
+    if feedback_key not in st.session_state:
+        st.session_state[feedback_key] = False
+    
+    # If already submitted, show thank you message
+    if st.session_state[feedback_key]:
+        st.success("🙏 **Thank you for your feedback! We will use it to improve our app.**")
+        return
+    
     # Simple direct approach - check database first
     try:
         conn = db._get_connection()
@@ -513,7 +523,8 @@ def render_feedback_section(db, cloud_mgr, record_id):
         
         # If feedback exists in DB, show it
         if result and result[0] and str(result[0]).strip() not in ['', 'None', 'nan']:
-            st.success(f"✅ You already gave feedback: **{result[0]}**")
+            st.success("🙏 **Thank you for your feedback! We will use it to improve our app.**")
+            st.session_state[feedback_key] = True
             conn.close()
             return
         
@@ -535,7 +546,8 @@ def render_feedback_section(db, cloud_mgr, record_id):
                 cursor.execute("UPDATE user_predictions SET user_feedback = ? WHERE id = ?", ("Yes", record_id))
                 conn.commit()
                 conn.close()
-                st.success("✅ Feedback saved: Yes")
+                st.session_state[feedback_key] = True
+                st.success("🙏 **Thank you for your feedback! We will use it to improve our app.**")
                 st.balloons()
             except Exception as e:
                 st.error(f"❌ Error: {e}")
@@ -550,7 +562,8 @@ def render_feedback_section(db, cloud_mgr, record_id):
                 cursor.execute("UPDATE user_predictions SET user_feedback = ? WHERE id = ?", ("No", record_id))
                 conn.commit()
                 conn.close()
-                st.info("✅ Feedback saved: No")
+                st.session_state[feedback_key] = True
+                st.success("🙏 **Thank you for your feedback! We will use it to improve our app.**")
             except Exception as e:
                 st.error(f"❌ Error: {e}")
             st.rerun()
@@ -564,10 +577,12 @@ def render_feedback_section(db, cloud_mgr, record_id):
                 cursor.execute("UPDATE user_predictions SET user_feedback = ? WHERE id = ?", ("Unsure", record_id))
                 conn.commit()
                 conn.close()
-                st.info("✅ Feedback saved: Not Sure")
+                st.session_state[feedback_key] = True
+                st.success("🙏 **Thank you for your feedback! We will use it to improve our app.**")
             except Exception as e:
                 st.error(f"❌ Error: {e}")
             st.rerun()
+
 
 
 
