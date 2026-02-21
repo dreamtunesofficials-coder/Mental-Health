@@ -716,14 +716,20 @@ def render_analytics(db):
         st.markdown("**📊 Feedback Statistics:**")
         col1, col2, col3, col4 = st.columns(4)
         
-        # Count feedback values
-        yes_count = (recent['user_feedback'].str.lower() == 'yes').sum() if 'user_feedback' in recent.columns else 0
-        no_count = (recent['user_feedback'].str.lower() == 'no').sum() if 'user_feedback' in recent.columns else 0
-        unsure_count = (recent['user_feedback'].str.lower() == 'unsure').sum() if 'user_feedback' in recent.columns else 0
-        
-        # Count not given (None, NaN, or empty)
-        not_given_mask = recent['user_feedback'].isna() | (recent['user_feedback'] == '') | (recent['user_feedback'].isnull())
-        not_given_count = not_given_mask.sum() if 'user_feedback' in recent.columns else len(recent)
+        # Count feedback values - handle None/NaN safely
+        if 'user_feedback' in recent.columns:
+            # Convert to string and handle None/NaN
+            feedback_series = recent['user_feedback'].fillna('').astype(str).str.lower().str.strip()
+            yes_count = (feedback_series == 'yes').sum()
+            no_count = (feedback_series == 'no').sum()
+            unsure_count = (feedback_series == 'unsure').sum()
+            not_given_count = (feedback_series == '').sum()
+        else:
+            yes_count = 0
+            no_count = 0
+            unsure_count = 0
+            not_given_count = len(recent)
+
         
         with col1:
             st.metric("✅ Yes", int(yes_count))
