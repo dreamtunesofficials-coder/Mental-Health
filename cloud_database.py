@@ -26,6 +26,14 @@ try:
 except ImportError:
     SUPABASE_AVAILABLE = False
 
+# Try to import streamlit for secrets
+try:
+    import streamlit as st
+    STREAMLIT_AVAILABLE = True
+except ImportError:
+    STREAMLIT_AVAILABLE = False
+
+
 
 class BaseDatabase:
     """Base class for database operations."""
@@ -264,15 +272,118 @@ class StressDetectionDatabase(BaseDatabase):
             return False
 
 
+class SupabaseDatabase:
+    """
+    Supabase database manager for permanent cloud storage.
+    """
+    
+    def __init__(self):
+        self.client = None
+        self._init_supabase()
+    
+    def _init_supabase(self):
+        """Initialize Supabase client."""
+        if not SUPABASE_AVAILABLE:
+            return
+        
+        try:
+            # Try to get credentials from Streamlit secrets
+            if STREAMLIT_AVAILABLE:
+                try:
+                    supabase_url = st.secrets.get("supabase", {}).get("url")
+                    supabase_key = st.secrets.get("supabase", {}).get("key")
+                except:
+                    supabase_url = None
+                    supabase_key = None
+            else:
+                supabase_url = os.environ.get('SUPABASE_URL')
+                supabase_key = os.environ.get('SUPABASE_KEY')
+            
+            if supabase_url and supabase_key:
+                self.client = create_client(supabase_url, supabase_key)
+                print("✅ Supabase connected successfully!")
+            else:
+                print("⚠️ Supabase credentials not found")
+        except Exception as e:
+            print(f"❌ Supabase connection error: {e}")
+    
+    def insert_prediction(self, **kwargs) -> bool:
+        """Insert prediction to Supabase."""
+        if not self.client:
+            return False
+        
+        try:
+            # Prepare data for Supabase
+            data = {
+                'timestamp': datetime.now().isoformat(),
+                'name': kwargs.get('name'),
+                'age': kwargs.get('age'),
+                'gender': kwargs.get('gender'),
+                'user_input_text': kwargs.get('user_input_text'),
+                'predicted_class': kwargs.get('predicted_class'),
+                'confidence_score': kwargs.get('confidence_score'),
+                'all_class_probabilities': json.dumps(kwargs.get('all_class_probabilities', {})),
+                'model_type': kwargs.get('model_type', 'ML'),
+                'session_id': kwargs.get('session_id'),
+                'ip_address': kwargs.get('ip_address'),
+                'user_agent': kwargs.get('user_agent'),
+                'user_feedback': kwargs.get('user_feedback')
+            }
+            
+            result = self.client.table('user_predictions').insert(data).execute()
+            return len(result.data) > 0
+        except Exception as e:
+            print(f"Supabase insert error: {e}")
+            return False
+    
+    def update_feedback(self, record_id: int, feedback: str) -> bool:
+        """Update feedback in Supabase."""
+        if not self.client:
+            return False
+        
+        try:
+            result = self.client.table('user_predictions').update({
+                'user_feedback': feedback
+            }).eq('id', record_id).execute()
+            return len(result.data) > 0
+        except Exception as e:
+            print(f"Supabase update error: {e}")
+            return False
+    
+    def get_all_predictions(self, limit: Optional[int] = None) -> pd.DataFrame:
+        """Get all predictions from Supabase."""
+        if not self.client:
+            return pd.DataFrame()
+        
+        try:
+            query = self.client.table('user_predictions').select('*').order('timestamp', desc=True)
+            if limit:
+                query = query.limit(limit)
+            
+            result = query.execute()
+            
+            if result.data:
+                df = pd.DataFrame(result.data)
+                df['all_class_probabilities'] = df['all_class_probabilities'].apply(
+                    lambda x: json.loads(x) if x else {}
+                )
+                return df
+            return pd.DataFrame()
+        except Exception as e:
+            print(f"Supabase query error: {e}")
+            return pd.DataFrame()
+
+
 class CloudDatabaseManager:
     """
     Manages database for both local and cloud deployments.
-    Uses session state to persist data on Streamlit Cloud.
+    Uses Supabase for permanent storage, SQLite as backup.
     """
     
     def __init__(self):
         self.is_cloud = self._is_streamlit_cloud()
         self.local_db = StressDetectionDatabase()
+        self.supabase_db = SupabaseDatabase()
         
         # Initialize session state for cloud storage
         if 'cloud_predictions' not in st.session_state:
@@ -280,12 +391,21 @@ class CloudDatabaseManager:
     
     def _is_streamlit_cloud(self) -> bool:
         """Check if running on Streamlit Cloud."""
-        return os.environ.get('STREAMLIT_SHARING_MODE') == 'streamlit-community'
+        return os.environ.get('STREAMLIT_SHARING_MODE') == 'streamlit-community' or STREAMLIT_AVAILABLE
+
     
     def insert_prediction(self, **kwargs) -> int:
         """Insert prediction - works for both local and cloud."""
         # Always save to local database
         record_id = self.local_db.insert_prediction(**kwargs)
+        
+        # Try to save to Supabase for permanent cloud storage
+        if self.supabase_db.client:
+            try:
+                self.supabase_db.insert_prediction(**kwargs)
+                print("✅ Data saved to Supabase cloud database!")
+            except Exception as e:
+                print(f"⚠️ Supabase save failed, using local storage: {e}")
         
         # Also save to session state for cloud persistence
         if self.is_cloud:
@@ -297,18 +417,58 @@ class CloudDatabaseManager:
             st.session_state.cloud_predictions.append(prediction_data)
         
         return record_id
+
     
     def update_feedback(self, record_id: int, feedback: str) -> bool:
-        """Update feedback."""
-        return self.local_db.update_feedback(record_id, feedback)
+        """Update feedback in all storage systems."""
+        # Update local database
+        local_result = self.local_db.update_feedback(record_id, feedback)
+        
+        # Update Supabase if available
+        if self.supabase_db.client:
+            try:
+                self.supabase_db.update_feedback(record_id, feedback)
+            except:
+                pass
+        
+        return local_result
+
     
     def get_all_predictions(self, limit: Optional[int] = None) -> pd.DataFrame:
-        """Get all predictions."""
+        """Get all predictions from best available source."""
+        # Try Supabase first for cloud
+        if self.supabase_db.client:
+            try:
+                df = self.supabase_db.get_all_predictions(limit)
+                if not df.empty:
+                    return df
+            except:
+                pass
+        
+        # Fall back to local database
         return self.local_db.get_all_predictions(limit)
+
     
     def get_statistics(self) -> Dict[str, Any]:
-        """Get statistics."""
+        """Get statistics from best available source."""
+        # Try Supabase first
+        if self.supabase_db.client:
+            try:
+                df = self.supabase_db.get_all_predictions()
+                if not df.empty:
+                    return {
+                        'total_predictions': len(df),
+                        'class_distribution': df['predicted_class'].value_counts().to_dict(),
+                        'average_confidence': df['confidence_score'].mean(),
+                        'feedback_statistics': df['user_feedback'].value_counts().to_dict() if 'user_feedback' in df.columns else {},
+                        'predictions_today': len(df[df['timestamp'].str.startswith(datetime.now().strftime('%Y-%m-%d'))])
+                    }
+            except:
+                pass
+        
+        # Fall back to local database
         return self.local_db.get_statistics()
+
     
     def export_to_csv(self, filepath: str) -> bool:
         """Export to CSV."""
