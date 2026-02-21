@@ -502,75 +502,99 @@ def render_feedback_section(db, cloud_mgr, record_id):
     st.markdown("---")
     st.markdown("### 👍 Was this prediction helpful?")
     
-    # Initialize session state for this record's feedback if not exists
+    # Create unique keys for this record
     feedback_key = f"feedback_submitted_{record_id}"
-    if feedback_key not in st.session_state:
-        st.session_state[feedback_key] = None
+    feedback_value_key = f"feedback_value_{record_id}"
     
-    # If feedback already submitted, show confirmation
+    # Initialize session state
+    if feedback_key not in st.session_state:
+        st.session_state[feedback_key] = False
+    if feedback_value_key not in st.session_state:
+        st.session_state[feedback_value_key] = None
+    
+    # Check if we already have feedback in database
+    try:
+        all_data = db.get_all_predictions(limit=1)
+        if not all_data.empty and 'user_feedback' in all_data.columns:
+            current_feedback = all_data.iloc[0].get('user_feedback')
+            if current_feedback and not st.session_state[feedback_key]:
+                st.session_state[feedback_key] = True
+                st.session_state[feedback_value_key] = current_feedback
+    except:
+        pass
+    
+    # Show confirmation if feedback submitted
     if st.session_state[feedback_key]:
-        st.success(f"✅ Feedback recorded: **{st.session_state[feedback_key]}**")
+        feedback_val = st.session_state[feedback_value_key]
+        st.success(f"✅ Feedback recorded: **{feedback_val}**")
         
-        # Show auto-retrain status
+        # Show feedback stats
         try:
             all_data = db.get_all_predictions()
             if not all_data.empty:
                 total = all_data['user_feedback'].notna().sum()
                 st.info(f"📊 Total feedback collected: {int(total)}")
-                if total >= 5:
-                    st.success("🎉 Enough feedback for auto-retrain!")
         except:
             pass
         return
     
-    # Create a container for better visibility
-    feedback_container = st.container()
+    # Create columns for buttons
+    col1, col2, col3 = st.columns(3)
     
-    with feedback_container:
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            if st.button("✅ Yes, Correct", key=f"fb_yes_{record_id}", use_container_width=True):
-                try:
-                    success = db.update_feedback(record_id, "Yes")
-                    if success:
-                        st.session_state[feedback_key] = "Yes"
-                        cloud_mgr.update_feedback(record_id, "Yes")
+    # Track which button was clicked using a callback approach
+    button_clicked = None
+    
+    with col1:
+        if st.button("✅ Yes, Correct", key=f"fb_yes_{record_id}", use_container_width=True, type="primary"):
+            button_clicked = "Yes"
+    
+    with col2:
+        if st.button("❌ No, Wrong", key=f"fb_no_{record_id}", use_container_width=True):
+            button_clicked = "No"
+    
+    with col3:
+        if st.button("🤔 Not Sure", key=f"fb_unsure_{record_id}", use_container_width=True):
+            button_clicked = "Unsure"
+    
+    # Process the button click outside the columns
+    if button_clicked:
+        with st.spinner("Saving feedback..."):
+            try:
+                # Update local database
+                success = db.update_feedback(record_id, button_clicked)
+                
+                if success:
+                    # Update cloud
+                    try:
+                        cloud_mgr.update_feedback(record_id, button_clicked)
+                    except:
+                        pass  # Cloud update is optional
+                    
+                    # Update session state
+                    st.session_state[feedback_key] = True
+                    st.session_state[feedback_value_key] = button_clicked
+                    
+                    # Show success message
+                    if button_clicked == "Yes":
                         st.success("Thank you! Feedback saved. 🙏")
                         st.balloons()
-                        st.rerun()
-                    else:
-                        st.error("Failed to save feedback")
-                except Exception as e:
-                    st.error(f"Error: {e}")
-        
-        with col2:
-            if st.button("❌ No, Wrong", key=f"fb_no_{record_id}", use_container_width=True):
-                try:
-                    success = db.update_feedback(record_id, "No")
-                    if success:
-                        st.session_state[feedback_key] = "No"
-                        cloud_mgr.update_feedback(record_id, "No")
+                    elif button_clicked == "No":
                         st.info("Thanks! We'll learn from this. 📚")
-                        st.rerun()
                     else:
-                        st.error("Failed to save feedback")
-                except Exception as e:
-                    st.error(f"Error: {e}")
-        
-        with col3:
-            if st.button("🤔 Not Sure", key=f"fb_unsure_{record_id}", use_container_width=True):
-                try:
-                    success = db.update_feedback(record_id, "Unsure")
-                    if success:
-                        st.session_state[feedback_key] = "Unsure"
-                        cloud_mgr.update_feedback(record_id, "Unsure")
                         st.info("Thanks for your input!")
-                        st.rerun()
-                    else:
-                        st.error("Failed to save feedback")
-                except Exception as e:
-                    st.error(f"Error: {e}")
+                    
+                    # Short delay then rerun
+                    import time
+                    time.sleep(0.5)
+                    st.rerun()
+                else:
+                    st.error("❌ Failed to save feedback to database")
+                    
+            except Exception as e:
+                st.error(f"❌ Error saving feedback: {str(e)}")
+                import traceback
+                st.code(traceback.format_exc())
+
 
 
 
