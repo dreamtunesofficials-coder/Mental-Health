@@ -61,9 +61,12 @@ class StressDetectionDatabase:
                 all_class_probabilities TEXT NOT NULL,
                 user_feedback TEXT,
                 model_type TEXT,
-                session_id TEXT
+                session_id TEXT,
+                ip_address TEXT,
+                user_agent TEXT
             )
         ''')
+
         
         # Create index on timestamp for faster queries
         cursor.execute('''
@@ -90,8 +93,11 @@ class StressDetectionDatabase:
         confidence_score: float,
         all_class_probabilities: Dict[str, float],
         model_type: str = 'ML',
-        session_id: Optional[str] = None
+        session_id: Optional[str] = None,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None
     ) -> int:
+
         """
         Insert a new prediction record.
         
@@ -116,8 +122,9 @@ class StressDetectionDatabase:
             cursor.execute('''
                 INSERT INTO user_predictions 
                 (name, age, gender, user_input_text, predicted_class, 
-                 confidence_score, all_class_probabilities, model_type, session_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 confidence_score, all_class_probabilities, model_type, session_id,
+                 ip_address, user_agent)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 name,
                 age,
@@ -127,8 +134,11 @@ class StressDetectionDatabase:
                 confidence_score,
                 json.dumps(all_class_probabilities),
                 model_type,
-                session_id
+                session_id,
+                ip_address,
+                user_agent
             ))
+
             
             record_id = cursor.lastrowid
             conn.commit()
