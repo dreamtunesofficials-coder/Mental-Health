@@ -1,0 +1,7 @@
+COMPREHENSIVE ACCURACY TEST RESULTS
+==================================================
+
+Training Accuracy (avg): 0.9094
+Test Accuracy (avg): 0.7394
+Cross-Validation: 0.7407
+Gap (avg): 0.1699

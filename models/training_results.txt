@@ -1,0 +1,38 @@
+MENTAL STRESS DETECTION - FINAL TRAINING RESULTS
+============================================================
+
+Dataset: 2838 samples (dreaddit)
+Training: 2270 samples (80%)
+Test: 568 samples (20%)
+
+OVERFITTING ANALYSIS:
+--------------------------------------------------
+- Training Accuracy: 89.82%
+- Test Accuracy: 74.65%
+- Gap: 15.18% (Some overfitting detected)
+
+CROSS-VALIDATION (5-Fold) - RELIABLE ESTIMATE:
+--------------------------------------------------
+- Mean CV Accuracy: 74.07% (+/- 1.05%)
+- CV Scores: [75.7%, 73.8%, 72.5%, 74.6%, 73.7%]
+
+REGULARIZATION TUNING:
+--------------------------------------------------
+- Best C: 1.0 (default is optimal)
+- C=1.0 gives best generalization
+
+FINAL MODEL RESULTS:
+--------------------------------------------------
+- Test Accuracy: 74.65%
+- Precision: 75.06%
+- Recall: 74.65%
+- F1 Score: 74.64%
+
+CONCLUSION:
+--------------------------------------------------
+The TRUE expected accuracy is ~74% (not 79%!)
+The model generalizes well on unseen data.
+
+Files saved:
+- models/proper_model.pkl (best generalizable model)
+- models/ml_model.pkl (default)

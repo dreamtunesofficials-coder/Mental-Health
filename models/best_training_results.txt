@@ -1,0 +1,15 @@
+MENTAL STRESS DETECTION - BEST MODEL RESULTS
+============================================================
+
+Configuration:
+  - Model: Logistic Regression
+  - Split: 90/10
+  - Max Features: 5000
+  - N-gram: (1, 2)
+  - Random State: 29
+
+Results:
+  Accuracy:  0.7923 (79.23%)
+  Precision: 0.7941
+  Recall:    0.7923
+  F1 Score: 0.7924

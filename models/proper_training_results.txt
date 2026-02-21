@@ -1,0 +1,8 @@
+PROPER TRAINING RESULTS (With Overfitting Prevention)
+============================================================
+
+Best C (regularization): 1.0
+Test Accuracy: 0.7465 (74.65%)
+Precision: 0.7506
+Recall: 0.7465
+F1 Score: 0.7464
