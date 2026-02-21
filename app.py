@@ -344,6 +344,7 @@ def main():
         """
         <div style='text-align: center; color: #888;'>
             <p>Mental Stress Detection App | For Educational Purposes</p>
+            <p><a href='https://github.com/dreamtunesofficials-coder/Mental-Health' target='_blank'>View Source Code on GitHub</a></p>
         </div>
         """,
         unsafe_allow_html=True
