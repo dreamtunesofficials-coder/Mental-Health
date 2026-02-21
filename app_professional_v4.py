@@ -498,106 +498,77 @@ def render_keyword_analysis(stress_keywords, positive_keywords):
 
 
 def render_feedback_section(db, cloud_mgr, record_id):
-    """Render feedback buttons with auto-retrain."""
+    """Render feedback buttons - Simple and Direct."""
     st.markdown("---")
     st.markdown("### 👍 Was this prediction helpful?")
     
-    # Create unique keys for this record
-    feedback_key = f"feedback_submitted_{record_id}"
-    feedback_value_key = f"feedback_value_{record_id}"
-    feedback_pending_key = f"feedback_pending_{record_id}"
-    
-    # Initialize session state
-    if feedback_key not in st.session_state:
-        st.session_state[feedback_key] = False
-    if feedback_value_key not in st.session_state:
-        st.session_state[feedback_value_key] = None
-    if feedback_pending_key not in st.session_state:
-        st.session_state[feedback_pending_key] = None
-    
-    # Check database for existing feedback
+    # Simple direct approach - check database first
     try:
         conn = db._get_connection()
         cursor = conn.cursor()
+        
+        # Check current feedback
         cursor.execute("SELECT user_feedback FROM user_predictions WHERE id = ?", (record_id,))
         result = cursor.fetchone()
+        
+        # If feedback exists in DB, show it
+        if result and result[0] and str(result[0]).strip() not in ['', 'None', 'nan']:
+            st.success(f"✅ You already gave feedback: **{result[0]}**")
+            conn.close()
+            return
+        
         conn.close()
-        
-        if result and result[0] and result[0] not in ['None', '', None]:
-            # Database has feedback
-            if not st.session_state[feedback_key]:
-                st.session_state[feedback_key] = True
-                st.session_state[feedback_value_key] = result[0]
     except Exception as e:
-        pass
+        st.error(f"Error checking feedback: {e}")
     
-    # Process pending feedback if any
-    if st.session_state[feedback_pending_key] is not None:
-        feedback_value = st.session_state[feedback_pending_key]
-        st.session_state[feedback_pending_key] = None  # Clear pending
-        
-        with st.spinner("Saving feedback..."):
-            try:
-                # Update local database
-                success = db.update_feedback(record_id, feedback_value)
-                
-                if success:
-                    # Update cloud
-                    try:
-                        cloud_mgr.update_feedback(record_id, feedback_value)
-                    except:
-                        pass
-                    
-                    # Update session state
-                    st.session_state[feedback_key] = True
-                    st.session_state[feedback_value_key] = feedback_value
-                    
-                    # Show success
-                    if feedback_value == "Yes":
-                        st.success("Thank you! Feedback saved. 🙏")
-                        st.balloons()
-                    elif feedback_value == "No":
-                        st.info("Thanks! We'll learn from this. 📚")
-                    else:
-                        st.info("Thanks for your input!")
-                else:
-                    st.error("❌ Failed to save feedback")
-            except Exception as e:
-                st.error(f"❌ Error: {str(e)}")
+    # Feedback buttons - Direct click handler
+    st.markdown("**Tap to give feedback:**")
     
-    # Show confirmation if already submitted
-    if st.session_state[feedback_key]:
-        feedback_val = st.session_state[feedback_value_key]
-        st.success(f"✅ Feedback recorded: **{feedback_val}**")
-        
-        # Show feedback stats
-        try:
-            all_data = db.get_all_predictions()
-            if not all_data.empty:
-                total = all_data['user_feedback'].notna().sum()
-                st.info(f"📊 Total feedback collected: {int(total)}")
-        except:
-            pass
-        return
-    
-    # Show buttons
-    st.markdown("**Select your feedback:**")
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("✅ Yes, Correct", key=f"fb_yes_{record_id}", use_container_width=True, type="primary"):
-            st.session_state[feedback_pending_key] = "Yes"
+        if st.button("✅ Yes", key=f"fb_yes_{record_id}", use_container_width=True):
+            # Direct save
+            try:
+                conn = db._get_connection()
+                cursor = conn.cursor()
+                cursor.execute("UPDATE user_predictions SET user_feedback = ? WHERE id = ?", ("Yes", record_id))
+                conn.commit()
+                conn.close()
+                st.success("✅ Feedback saved: Yes")
+                st.balloons()
+            except Exception as e:
+                st.error(f"❌ Error: {e}")
             st.rerun()
     
     with col2:
-        if st.button("❌ No, Wrong", key=f"fb_no_{record_id}", use_container_width=True):
-            st.session_state[feedback_pending_key] = "No"
+        if st.button("❌ No", key=f"fb_no_{record_id}", use_container_width=True):
+            # Direct save
+            try:
+                conn = db._get_connection()
+                cursor = conn.cursor()
+                cursor.execute("UPDATE user_predictions SET user_feedback = ? WHERE id = ?", ("No", record_id))
+                conn.commit()
+                conn.close()
+                st.info("✅ Feedback saved: No")
+            except Exception as e:
+                st.error(f"❌ Error: {e}")
             st.rerun()
     
     with col3:
         if st.button("🤔 Not Sure", key=f"fb_unsure_{record_id}", use_container_width=True):
-            st.session_state[feedback_pending_key] = "Unsure"
+            # Direct save
+            try:
+                conn = db._get_connection()
+                cursor = conn.cursor()
+                cursor.execute("UPDATE user_predictions SET user_feedback = ? WHERE id = ?", ("Unsure", record_id))
+                conn.commit()
+                conn.close()
+                st.info("✅ Feedback saved: Not Sure")
+            except Exception as e:
+                st.error(f"❌ Error: {e}")
             st.rerun()
+
 
 
 
