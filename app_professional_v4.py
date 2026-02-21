@@ -506,24 +506,33 @@ def render_feedback_section(db, cloud_mgr, record_id):
     feedback_key = f"feedback_submitted_{record_id}"
     feedback_value_key = f"feedback_value_{record_id}"
     
-    # Initialize session state
+    # Initialize session state for this record if not exists
     if feedback_key not in st.session_state:
         st.session_state[feedback_key] = False
     if feedback_value_key not in st.session_state:
         st.session_state[feedback_value_key] = None
     
-    # Check if we already have feedback in database
+    # Check current feedback status from database for this specific record
     try:
-        all_data = db.get_all_predictions(limit=1)
+        all_data = db.get_all_predictions(limit=50)  # Get more records to find our specific one
         if not all_data.empty and 'user_feedback' in all_data.columns:
-            current_feedback = all_data.iloc[0].get('user_feedback')
-            if current_feedback and not st.session_state[feedback_key]:
-                st.session_state[feedback_key] = True
-                st.session_state[feedback_value_key] = current_feedback
-    except:
+            # Find the specific record
+            record_data = all_data[all_data['id'] == record_id]
+            if not record_data.empty:
+                current_feedback = record_data.iloc[0].get('user_feedback')
+                # If database has feedback and session doesn't, update session
+                if current_feedback and pd.notna(current_feedback) and current_feedback != "":
+                    if not st.session_state[feedback_key]:
+                        st.session_state[feedback_key] = True
+                        st.session_state[feedback_value_key] = current_feedback
+                else:
+                    # Database shows no feedback, reset session state
+                    st.session_state[feedback_key] = False
+                    st.session_state[feedback_value_key] = None
+    except Exception as e:
         pass
     
-    # Show confirmation if feedback submitted
+    # Show confirmation if feedback already submitted
     if st.session_state[feedback_key]:
         feedback_val = st.session_state[feedback_value_key]
         st.success(f"✅ Feedback recorded: **{feedback_val}**")
@@ -538,62 +547,65 @@ def render_feedback_section(db, cloud_mgr, record_id):
             pass
         return
     
-    # Create columns for buttons
-    col1, col2, col3 = st.columns(3)
-    
-    # Track which button was clicked using a callback approach
-    button_clicked = None
-    
-    with col1:
-        if st.button("✅ Yes, Correct", key=f"fb_yes_{record_id}", use_container_width=True, type="primary"):
+    # Create a form for feedback to ensure proper submission
+    with st.form(key=f"feedback_form_{record_id}", clear_on_submit=False):
+        st.markdown("**Select your feedback:**")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            yes_btn = st.form_submit_button("✅ Yes, Correct", use_container_width=True, type="primary")
+        with col2:
+            no_btn = st.form_submit_button("❌ No, Wrong", use_container_width=True)
+        with col3:
+            unsure_btn = st.form_submit_button("🤔 Not Sure", use_container_width=True)
+        
+        # Determine which button was clicked
+        button_clicked = None
+        if yes_btn:
             button_clicked = "Yes"
-    
-    with col2:
-        if st.button("❌ No, Wrong", key=f"fb_no_{record_id}", use_container_width=True):
+        elif no_btn:
             button_clicked = "No"
-    
-    with col3:
-        if st.button("🤔 Not Sure", key=f"fb_unsure_{record_id}", use_container_width=True):
+        elif unsure_btn:
             button_clicked = "Unsure"
-    
-    # Process the button click outside the columns
-    if button_clicked:
-        with st.spinner("Saving feedback..."):
-            try:
-                # Update local database
-                success = db.update_feedback(record_id, button_clicked)
-                
-                if success:
-                    # Update cloud
-                    try:
-                        cloud_mgr.update_feedback(record_id, button_clicked)
-                    except:
-                        pass  # Cloud update is optional
+        
+        # Process the feedback
+        if button_clicked:
+            with st.spinner("Saving feedback..."):
+                try:
+                    # Update local database
+                    success = db.update_feedback(record_id, button_clicked)
                     
-                    # Update session state
-                    st.session_state[feedback_key] = True
-                    st.session_state[feedback_value_key] = button_clicked
-                    
-                    # Show success message
-                    if button_clicked == "Yes":
-                        st.success("Thank you! Feedback saved. 🙏")
-                        st.balloons()
-                    elif button_clicked == "No":
-                        st.info("Thanks! We'll learn from this. 📚")
+                    if success:
+                        # Update cloud
+                        try:
+                            cloud_mgr.update_feedback(record_id, button_clicked)
+                        except:
+                            pass  # Cloud update is optional
+                        
+                        # Update session state
+                        st.session_state[feedback_key] = True
+                        st.session_state[feedback_value_key] = button_clicked
+                        
+                        # Show success message
+                        if button_clicked == "Yes":
+                            st.success("Thank you! Feedback saved. 🙏")
+                            st.balloons()
+                        elif button_clicked == "No":
+                            st.info("Thanks! We'll learn from this. 📚")
+                        else:
+                            st.info("Thanks for your input!")
+                        
+                        # Rerun to update UI
+                        st.rerun()
                     else:
-                        st.info("Thanks for your input!")
-                    
-                    # Short delay then rerun
-                    import time
-                    time.sleep(0.5)
-                    st.rerun()
-                else:
-                    st.error("❌ Failed to save feedback to database")
-                    
-            except Exception as e:
-                st.error(f"❌ Error saving feedback: {str(e)}")
-                import traceback
-                st.code(traceback.format_exc())
+                        st.error("❌ Failed to save feedback to database")
+                        
+                except Exception as e:
+                    st.error(f"❌ Error saving feedback: {str(e)}")
+                    import traceback
+                    st.code(traceback.format_exc())
+
 
 
 
