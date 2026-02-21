@@ -502,62 +502,76 @@ def render_feedback_section(db, cloud_mgr, record_id):
     st.markdown("---")
     st.markdown("### 👍 Was this prediction helpful?")
     
+    # Initialize session state for this record's feedback if not exists
+    feedback_key = f"feedback_submitted_{record_id}"
+    if feedback_key not in st.session_state:
+        st.session_state[feedback_key] = None
+    
+    # If feedback already submitted, show confirmation
+    if st.session_state[feedback_key]:
+        st.success(f"✅ Feedback recorded: **{st.session_state[feedback_key]}**")
+        
+        # Show auto-retrain status
+        try:
+            all_data = db.get_all_predictions()
+            if not all_data.empty:
+                total = all_data['user_feedback'].notna().sum()
+                st.info(f"📊 Total feedback collected: {int(total)}")
+                if total >= 5:
+                    st.success("🎉 Enough feedback for auto-retrain!")
+        except:
+            pass
+        return
+    
     # Create a container for better visibility
     feedback_container = st.container()
     
     with feedback_container:
         col1, col2, col3 = st.columns(3)
         
-        feedback_given = False
-        
         with col1:
             if st.button("✅ Yes, Correct", key=f"fb_yes_{record_id}", use_container_width=True):
                 try:
-                    db.update_feedback(record_id, "Yes")
-                    cloud_mgr.update_feedback(record_id, "Yes")
-                    st.success("Thank you! Feedback saved. 🙏")
-                    st.balloons()
-                    feedback_given = True
+                    success = db.update_feedback(record_id, "Yes")
+                    if success:
+                        st.session_state[feedback_key] = "Yes"
+                        cloud_mgr.update_feedback(record_id, "Yes")
+                        st.success("Thank you! Feedback saved. 🙏")
+                        st.balloons()
+                        st.rerun()
+                    else:
+                        st.error("Failed to save feedback")
                 except Exception as e:
-                    st.error(f"Error saving feedback: {e}")
+                    st.error(f"Error: {e}")
         
         with col2:
             if st.button("❌ No, Wrong", key=f"fb_no_{record_id}", use_container_width=True):
                 try:
-                    db.update_feedback(record_id, "No")
-                    cloud_mgr.update_feedback(record_id, "No")
-                    st.info("Thanks! We'll learn from this. 📚")
-                    feedback_given = True
+                    success = db.update_feedback(record_id, "No")
+                    if success:
+                        st.session_state[feedback_key] = "No"
+                        cloud_mgr.update_feedback(record_id, "No")
+                        st.info("Thanks! We'll learn from this. 📚")
+                        st.rerun()
+                    else:
+                        st.error("Failed to save feedback")
                 except Exception as e:
-                    st.error(f"Error saving feedback: {e}")
+                    st.error(f"Error: {e}")
         
         with col3:
             if st.button("🤔 Not Sure", key=f"fb_unsure_{record_id}", use_container_width=True):
                 try:
-                    db.update_feedback(record_id, "Unsure")
-                    cloud_mgr.update_feedback(record_id, "Unsure")
-                    st.info("Thanks for your input!")
-                    feedback_given = True
+                    success = db.update_feedback(record_id, "Unsure")
+                    if success:
+                        st.session_state[feedback_key] = "Unsure"
+                        cloud_mgr.update_feedback(record_id, "Unsure")
+                        st.info("Thanks for your input!")
+                        st.rerun()
+                    else:
+                        st.error("Failed to save feedback")
                 except Exception as e:
-                    st.error(f"Error saving feedback: {e}")
-    
-    # After feedback, show auto-retrain status
-    if feedback_given:
-        st.markdown("---")
-        try:
-            # Count feedback from local database
-            all_data = db.get_all_predictions()
-            if not all_data.empty:
-                total = all_data['user_feedback'].notna().sum()
-            else:
-                total = 0
-        except:
-            total = 0
-        
-        if total >= 5:
-            st.success("🎉 Enough feedback collected! Model will auto-retrain soon.")
-        else:
-            st.info(f"📊 Feedback collected: {int(total)}/5 for auto-retrain")
+                    st.error(f"Error: {e}")
+
 
 
 

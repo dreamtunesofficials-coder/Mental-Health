@@ -165,6 +165,13 @@ class StressDetectionDatabase:
             conn = self._get_connection()
             cursor = conn.cursor()
             
+            # First check if record exists
+            cursor.execute("SELECT id FROM user_predictions WHERE id = ?", (record_id,))
+            if not cursor.fetchone():
+                conn.close()
+                return False
+            
+            # Update the feedback
             cursor.execute('''
                 UPDATE user_predictions 
                 SET user_feedback = ? 
@@ -172,13 +179,19 @@ class StressDetectionDatabase:
             ''', (feedback, record_id))
             
             conn.commit()
+            
+            # Verify the update
+            cursor.execute("SELECT user_feedback FROM user_predictions WHERE id = ?", (record_id,))
+            result = cursor.fetchone()
             conn.close()
             
-            return cursor.rowcount > 0
+            return result is not None and result[0] == feedback
             
         except Exception as e:
             st.error(f"Database error while updating feedback: {e}")
             return False
+
+
     
     def get_all_predictions(self, limit: Optional[int] = None) -> pd.DataFrame:
         """
