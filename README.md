@@ -1,5 +1,7 @@
 # Mental Stress Detection
 
+🌐 **Live App:** [https://healthstresscheckup.streamlit.app/](https://healthstresscheckup.streamlit.app/)
+
 A machine learning and deep learning project for detecting mental stress from text data using traditional ML models (Logistic Regression, SVM, Random Forest) and BERT-based models.
 
 ## 📁 Project Structure
@@ -68,12 +70,17 @@ pip install -r requirements.txt
 
 ### Running the Streamlit App
 
+You can directly access the live app at: **https://healthstresscheckup.streamlit.app/**
+
+Or run locally:
+
 ```
 bash
 streamlit run app.py
 ```
 
 The application will open at `http://localhost:8501`
+Deployed link: `https://healthstresscheckup.streamlit.app/`
 
 ### Training Traditional ML Models
 
