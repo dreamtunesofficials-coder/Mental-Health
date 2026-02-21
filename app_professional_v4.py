@@ -499,51 +499,66 @@ def render_keyword_analysis(stress_keywords, positive_keywords):
 
 def render_feedback_section(db, cloud_mgr, record_id):
     """Render feedback buttons with auto-retrain."""
+    st.markdown("---")
     st.markdown("### 👍 Was this prediction helpful?")
-    col1, col2, col3 = st.columns(3)
     
-    feedback_given = False
+    # Create a container for better visibility
+    feedback_container = st.container()
     
-    with col1:
-        if st.button("✅ Yes", key=f"fb_yes_{record_id}"):
-            db.update_feedback(record_id, "Yes")
-            # Also update Supabase cloud!
-            cloud_mgr.update_feedback(record_id, "Yes")
-            st.success("Thank you! 🙏")
-            st.balloons()
-            feedback_given = True
-    
-    with col2:
-        if st.button("❌ No", key=f"fb_no_{record_id}"):
-            db.update_feedback(record_id, "No")
-            # Also update Supabase cloud!
-            cloud_mgr.update_feedback(record_id, "No")
-            st.info("Thanks! We'll learn from this. 📚")
-            feedback_given = True
-    
-    with col3:
-        if st.button("🤔 Unsure", key=f"fb_unsure_{record_id}"):
-            db.update_feedback(record_id, "Unsure")
-            cloud_mgr.update_feedback(record_id, "Unsure")
-            st.info("Thanks!")
-            feedback_given = True
+    with feedback_container:
+        col1, col2, col3 = st.columns(3)
+        
+        feedback_given = False
+        
+        with col1:
+            if st.button("✅ Yes, Correct", key=f"fb_yes_{record_id}", use_container_width=True):
+                try:
+                    db.update_feedback(record_id, "Yes")
+                    cloud_mgr.update_feedback(record_id, "Yes")
+                    st.success("Thank you! Feedback saved. 🙏")
+                    st.balloons()
+                    feedback_given = True
+                except Exception as e:
+                    st.error(f"Error saving feedback: {e}")
+        
+        with col2:
+            if st.button("❌ No, Wrong", key=f"fb_no_{record_id}", use_container_width=True):
+                try:
+                    db.update_feedback(record_id, "No")
+                    cloud_mgr.update_feedback(record_id, "No")
+                    st.info("Thanks! We'll learn from this. 📚")
+                    feedback_given = True
+                except Exception as e:
+                    st.error(f"Error saving feedback: {e}")
+        
+        with col3:
+            if st.button("🤔 Not Sure", key=f"fb_unsure_{record_id}", use_container_width=True):
+                try:
+                    db.update_feedback(record_id, "Unsure")
+                    cloud_mgr.update_feedback(record_id, "Unsure")
+                    st.info("Thanks for your input!")
+                    feedback_given = True
+                except Exception as e:
+                    st.error(f"Error saving feedback: {e}")
     
     # After feedback, show auto-retrain status
     if feedback_given:
         st.markdown("---")
         try:
-            response = cloud_mgr.supabase_db.client.table('user_predictions')\
-                .select('id', count='exact')\
-                .not_.is_('user_feedback', 'null')\
-                .execute()
-            total = response.count if hasattr(response, 'count') else 0
+            # Count feedback from local database
+            all_data = db.get_all_predictions()
+            if not all_data.empty:
+                total = all_data['user_feedback'].notna().sum()
+            else:
+                total = 0
         except:
             total = 0
         
         if total >= 5:
-            st.success("🎉 Enough feedback collected! Model will auto-retrain.")
+            st.success("🎉 Enough feedback collected! Model will auto-retrain soon.")
         else:
-            st.info(f"📊 Feedback collected: {total}/5 for auto-retrain")
+            st.info(f"📊 Feedback collected: {int(total)}/5 for auto-retrain")
+
 
 
 
