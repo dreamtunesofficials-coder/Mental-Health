@@ -65,12 +65,11 @@ st.markdown("""
 
 def load_ml_model():
     """
-    Load the ML model. Uses regularized_model.pkl (best for generalization with less overfitting).
+    Load the ML model. Uses best_model.pkl for better accuracy.
     
     Returns:
         Loaded model or None
     """
-    # Use best_model.pkl for better accuracy
     model_path = './models/best_model.pkl'
     
     if os.path.exists(model_path):
@@ -122,24 +121,18 @@ def predict_stress(
     Returns:
         Dictionary with prediction results
     """
-    # Preprocess text
     processed_text = preprocess_text(text)
     
     if model_type == 'ML' and model_data is not None:
         model = model_data.get('model')
-        
-        # Try to get text_extractor first (new format), then vectorizer (old format)
         text_extractor = model_data.get('text_extractor') or model_data.get('vectorizer')
         scaler = model_data.get('scaler')
         
         if model is not None and text_extractor is not None:
-            # Transform text
             text_features = text_extractor.transform([processed_text])
             
-            # Get numerical features if scaler is available
             if scaler is not None and 'numerical_cols' in model_data:
                 numerical_cols = model_data.get('numerical_cols', [])
-                # Use default values for numerical features (mean=0 after scaling)
                 numerical_features = np.zeros((1, len(numerical_cols)))
                 numerical_scaled = scaler.transform(numerical_features)
                 from scipy.sparse import hstack, csr_matrix
@@ -147,10 +140,8 @@ def predict_stress(
             else:
                 features = text_features
             
-            # Get prediction
             prediction = model.predict(features)[0]
             
-            # Get probability if available
             if hasattr(model, 'predict_proba'):
                 probabilities = model.predict_proba(features)[0]
                 confidence = max(probabilities)
@@ -165,7 +156,6 @@ def predict_stress(
                 'model_type': 'ML'
             }
     
-    # Return mock prediction for demo
     word_count = len(text.split())
     stress_indicators = ['anxious', 'worried', 'stress', 'overwhelmed', 
                         'pressure', 'nervous', 'tense', 'panic']
@@ -188,20 +178,17 @@ def main():
     """
     Main Streamlit application.
     """
-    # Title and header
     st.title("🧠 Mental Stress Detection")
     st.markdown("### AI-Powered Stress Detection from Text")
     
     # Sidebar
     st.sidebar.title("⚙️ Settings")
     
-    # Model selection
     model_type = st.sidebar.radio(
         "Select Model",
         ["Traditional ML", "Demo Mode", "BERT Model"]
     )
     
-    # Load ML model if selected
     ml_model_data = None
     if model_type == "Traditional ML":
         with st.spinner("Loading ML model..."):
@@ -222,11 +209,15 @@ def main():
         "to analyze stress levels."
     )
     
+    # Usage section
+    st.sidebar.markdown("### 💻 Usage")
+    st.sidebar.code("streamlit run app.py", language="bash")
+    st.sidebar.markdown("The application will open at http://localhost:8501")
+    
     # Main content
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        # Text input
         st.markdown("### 📝 Enter Your Text")
         text_input = st.text_area(
             "Type or paste text to analyze:",
@@ -234,11 +225,9 @@ def main():
             placeholder="Enter text that expresses your thoughts, feelings, or experiences..."
         )
         
-        # Analyze button
         if st.button("🔍 Analyze Stress Level", type="primary"):
             if text_input.strip():
                 with st.spinner("Analyzing text..."):
-                    # Get prediction based on model type
                     if model_type == "Traditional ML" and ml_model_data is not None:
                         result = predict_stress(
                             text_input,
@@ -252,10 +241,8 @@ def main():
                             model_type=model_type
                         )
                     
-                    # Display results
                     st.markdown("### 📊 Analysis Results")
                     
-                    # Prediction
                     prediction = result['prediction']
                     confidence = result['confidence']
                     
@@ -280,7 +267,6 @@ def main():
                             unsafe_allow_html=True
                         )
                     
-                    # Probability bar
                     if result['probabilities'] is not None:
                         st.markdown("#### Probability Distribution")
                         probs = result['probabilities']
@@ -292,7 +278,6 @@ def main():
                         
                         st.bar_chart(prob_df.set_index('Class'))
                     
-                    # Text statistics
                     st.markdown("#### 📈 Text Statistics")
                     col_stat1, col_stat2, col_stat3 = st.columns(3)
                     
@@ -307,7 +292,6 @@ def main():
                 st.warning("Please enter some text to analyze.")
     
     with col2:
-        # Sample texts
         st.markdown("### 📋 Sample Texts")
         
         sample_texts = {
@@ -320,7 +304,6 @@ def main():
             if st.button(f"Use {label} Sample"):
                 st.session_state['sample_text'] = sample
         
-        # Check for sample text in session
         if 'sample_text' in st.session_state:
             st.text_area(
                 "Sample Text:",
@@ -329,7 +312,6 @@ def main():
                 disabled=True
             )
         
-        # Tips section
         st.markdown("### 💡 Tips")
         st.markdown("""
         - Be honest in your input
