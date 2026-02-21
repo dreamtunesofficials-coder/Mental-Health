@@ -652,9 +652,75 @@ def render_analytics(db):
     st.markdown("### Recent Predictions")
     recent = db.get_all_predictions(limit=10)
     if not recent.empty:
-        display = recent[['timestamp', 'name', 'predicted_class', 'confidence_score', 'user_feedback']].copy()
+        # Prepare display dataframe
+        display_cols = ['timestamp', 'name', 'predicted_class', 'confidence_score', 'user_feedback']
+        display = recent[display_cols].copy()
         display.columns = ['Time', 'Name', 'Prediction', 'Confidence', 'Feedback']
-        st.dataframe(display, use_container_width=True, hide_index=True)
+        
+        # Format feedback - handle None, NaN, empty string
+        def format_feedback(val):
+            if pd.isna(val) or val is None or str(val).strip() == "" or str(val).lower() == "nan":
+                return "⏳ Not given"
+            elif str(val).lower() == "yes":
+                return "✅ Yes"
+            elif str(val).lower() == "no":
+                return "❌ No"
+            elif str(val).lower() == "unsure":
+                return "🤔 Unsure"
+            else:
+                return str(val)
+        
+        display['Feedback'] = display['Feedback'].apply(format_feedback)
+        
+        # Format confidence as percentage
+        display['Confidence'] = display['Confidence'].apply(lambda x: f"{x:.1%}" if pd.notna(x) else "N/A")
+        
+        # Format timestamp
+        display['Time'] = display['Time'].apply(lambda x: str(x)[:16] if pd.notna(x) else "N/A")
+        
+        # Style the dataframe
+        def color_feedback(val):
+            if "✅" in str(val):
+                return 'background-color: #d4edda; color: #155724; font-weight: 600;'
+            elif "❌" in str(val):
+                return 'background-color: #f8d7da; color: #721c24; font-weight: 600;'
+            elif "🤔" in str(val):
+                return 'background-color: #fff3cd; color: #856404; font-weight: 600;'
+            else:
+                return 'background-color: #f8f9fa; color: #6c757d;'
+        
+        def color_prediction(val):
+            if val == "Stress":
+                return 'background-color: #f8d7da; color: #721c24; font-weight: 600;'
+            else:
+                return 'background-color: #d4edda; color: #155724; font-weight: 600;'
+        
+        styled_df = display.style.map(color_feedback, subset=['Feedback']).map(color_prediction, subset=['Prediction'])
+        st.dataframe(styled_df, use_container_width=True, hide_index=True)
+        
+        # Show feedback statistics below the table
+        st.markdown("**📊 Feedback Statistics:**")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        # Count feedback values
+        yes_count = (recent['user_feedback'].str.lower() == 'yes').sum() if 'user_feedback' in recent.columns else 0
+        no_count = (recent['user_feedback'].str.lower() == 'no').sum() if 'user_feedback' in recent.columns else 0
+        unsure_count = (recent['user_feedback'].str.lower() == 'unsure').sum() if 'user_feedback' in recent.columns else 0
+        
+        # Count not given (None, NaN, or empty)
+        not_given_mask = recent['user_feedback'].isna() | (recent['user_feedback'] == '') | (recent['user_feedback'].isnull())
+        not_given_count = not_given_mask.sum() if 'user_feedback' in recent.columns else len(recent)
+        
+        with col1:
+            st.metric("✅ Yes", int(yes_count))
+        with col2:
+            st.metric("❌ No", int(no_count))
+        with col3:
+            st.metric("🤔 Unsure", int(unsure_count))
+        with col4:
+            st.metric("⏳ Not Given", int(not_given_count))
+
+
 
 
 # ============================================
