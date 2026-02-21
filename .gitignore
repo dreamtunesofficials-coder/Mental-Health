@@ -37,8 +37,7 @@ env/
 .ipynb_checkpoints/
 *.ipynb
 
-# Model files (too large)
-*.pkl
+# Model files - keeping pkl for Streamlit Cloud
 *.h5
 *.pt
 *.pth
