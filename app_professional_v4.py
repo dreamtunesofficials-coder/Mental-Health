@@ -645,12 +645,36 @@ def render_analytics(db):
     st.markdown("### Recent Predictions")
     recent = db.get_all_predictions(limit=10)
     if not recent.empty:
-        # Prepare display dataframe
-        display_cols = ['timestamp', 'name', 'predicted_class', 'confidence_score', 'user_feedback']
+        # Prepare display dataframe - include all user info columns
+        display_cols = ['id', 'timestamp', 'name', 'age', 'gender', 'predicted_class', 'confidence_score', 'user_feedback', 'model_type']
         display = recent[display_cols].copy()
-        display.columns = ['Time', 'Name', 'Prediction', 'Confidence', 'Feedback']
+        display.columns = ['ID', 'Time', 'Name', 'Age', 'Gender', 'Prediction', 'Confidence', 'Feedback', 'Model']
+        
+        # Format Name - handle None/NaN
+        def format_name(val):
+            if pd.isna(val) or val is None or str(val).strip() == "" or str(val).lower() == "nan":
+                return "👤 Anonymous"
+            return str(val)
+        
+        # Format Age - handle None/NaN/0
+        def format_age(val):
+            if pd.isna(val) or val is None or val == 0:
+                return "-"
+            return str(int(val))
+        
+        # Format Gender - handle None/NaN
+        def format_gender(val):
+            if pd.isna(val) or val is None or str(val).strip() == "" or str(val).lower() == "nan":
+                return "-"
+            return str(val)
+        
+        # Apply formatting
+        display['Name'] = display['Name'].apply(format_name)
+        display['Age'] = display['Age'].apply(format_age)
+        display['Gender'] = display['Gender'].apply(format_gender)
         
         # Format feedback - handle None, NaN, empty string
+
         def format_feedback(val):
             if pd.isna(val) or val is None or str(val).strip() == "" or str(val).lower() == "nan":
                 return "⏳ Not given"
